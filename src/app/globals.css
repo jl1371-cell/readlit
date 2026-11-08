@@ -1,0 +1,466 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens — the MapLit "warm study" language, so every component here can move into MapLit unchanged.
+ * Names match MapLit's tailwind.config.ts (bg-paper, text-ink, border-latte-line/40, shadow-card …).
+ */
+@theme {
+  --color-paper: #faf6ef;
+  --color-canvas: #f2ebdd;
+  --color-parchment: #e8dec9;
+  --color-latte: #78614d;
+  --color-latte-line: #c9b89a;
+  --color-latte-deep: #5a4838;
+  --color-ink: #2b2621;
+  --color-ink-soft: #3d352d;
+  --color-paprika: #d14b28;
+  --color-paprika-soft: #e8633f;
+  --color-paprika-ghost: rgba(209, 75, 40, 0.08);
+  --color-beeswax: #e9a752;
+  --color-champagne: #f0d7a3;
+  --color-champagne-tint: #fbf4e4;
+  --color-sage: #accab2;
+  --color-sage-deep: #7fa885;
+  --color-sage-text: #4f7757;
+  --color-crystal: #a6d1e6;
+  --color-crystal-deep: #7fa5bc;
+  --color-crystal-text: #4e7994;
+
+  --font-display: var(--font-fraunces), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Source Han Sans SC", Georgia, serif;
+  --font-sans: var(--font-inter), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Source Han Sans SC", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  /*
+   * One type scale (2026-11-08; research: 调研记录/阅读器交互-2026-11-07/10-字号与排版标准.md). Reading text is 16px and
+   * interface text 14px, as in Atlassian, Carbon, Material 3 and USWDS; nothing is smaller than 12px. Components use
+   * only these roles (text-body, text-ui …), never a pixel size, so the whole app changes in one place. rem keeps the
+   * reader's own browser font size in charge.
+   */
+  --text-*: initial;
+  --text-caption: 0.75rem; /* 12px: page chips, keys, counts */
+  --text-caption--line-height: 1.125rem;
+  --text-label: 0.8125rem; /* 13px: secondary lines, small headings, hints */
+  --text-label--line-height: 1.25rem;
+  --text-ui: 0.875rem; /* 14px: buttons, menus, tabs, notices */
+  --text-ui--line-height: 1.375rem;
+  --text-body-sm: 0.9375rem; /* 15px: compact reading (key points, quoted passages) */
+  --text-body-sm--line-height: 1.5rem;
+  --text-body: 1rem; /* 16px: reading (answers, notes, the composer) */
+  --text-body--line-height: 1.625rem;
+  --text-heading: 1.125rem; /* 18px: Fraunces headings, main branches */
+  --text-heading--line-height: 1.625rem;
+  --text-title: 1.375rem; /* 22px: Fraunces titles */
+  --text-title--line-height: 1.875rem;
+  --text-display: 2.75rem; /* 44px: the home page */
+  --text-display--line-height: 3rem;
+  --text-display--letter-spacing: -0.01em;
+
+  --shadow-card: 0 2px 8px -2px rgba(43, 38, 33, 0.08), 0 1px 3px -1px rgba(43, 38, 33, 0.06);
+  --shadow-card-hover: 0 8px 24px -4px rgba(43, 38, 33, 0.14), 0 2px 6px -2px rgba(43, 38, 33, 0.08);
+  --shadow-panel: -4px 0 24px -8px rgba(43, 38, 33, 0.12);
+}
+
+:root {
+  color-scheme: light;
+  /* Typefaces for text that replaces the paper's own text, matched to the paper's style. */
+  --overlay-serif: var(--font-noto-serif-sc), "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", Georgia,
+    "Times New Roman", serif;
+  --overlay-sans: var(--font-inter), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
+    sans-serif;
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: rgba(240, 215, 163, 0.7);
+  }
+
+  /*
+   * Text the AI writes carries its language (lang), so each language gets its own glyphs: Japanese is never drawn
+   * with Chinese forms. In the base layer, so a utility such as font-display or font-mono still wins.
+   */
+  :lang(zh-Hans) {
+    font-family: var(--font-inter), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Noto Sans SC", "Noto Sans CJK SC", sans-serif;
+  }
+  :lang(zh-Hant) {
+    font-family: var(--font-inter), "PingFang TC", "Noto Sans TC", "Microsoft JhengHei UI", "Noto Sans CJK TC", sans-serif;
+  }
+  :lang(ja) {
+    font-family: var(--font-inter), "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
+  }
+  :lang(ko) {
+    font-family: var(--font-inter), "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  }
+  /* The gap between Chinese or Japanese and Latin letters, and strict line breaking, for everything the AI writes. */
+  .ai-text:lang(zh-Hans),
+  .ai-text:lang(zh-Hant),
+  .ai-text:lang(ja) {
+    text-autospace: normal;
+    line-break: strict;
+  }
+
+  /* Utilities (outline-none on fields inside a focus-within frame) can override this. */
+  :focus-visible {
+    outline: 2px solid var(--color-paprika);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* A page reference ("p.4"): the same small chip everywhere it appears. */
+  .chip {
+    display: inline-flex;
+    height: 1.25rem;
+    align-items: center;
+    border-radius: 9999px;
+    background: var(--color-canvas);
+    padding: 0 0.375rem;
+    font-size: var(--text-caption);
+    line-height: 1;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-latte-deep);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-latte-line) 40%, transparent);
+  }
+}
+
+/* The English version under a paragraph the AI wrote: the same voice, one step quieter. */
+.pair {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--color-latte);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  animation: pair-in 280ms ease-out both;
+}
+@keyframes pair-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Floating chrome only: warm-paper glass (MapLit DESIGN_SYSTEM §1.5). */
+.glass {
+  background: color-mix(in srgb, var(--color-paper) 78%, transparent);
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  border: 1px solid color-mix(in srgb, var(--color-latte-line) 40%, transparent);
+}
+
+/* Floating chrome that sits on top of reading text needs more paper and less see-through. */
+.glass-strong {
+  background: color-mix(in srgb, var(--color-paper) 95%, transparent);
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+  border: 1px solid color-mix(in srgb, var(--color-latte-line) 50%, transparent);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Thin, quiet scrollbars inside panels. */
+.quiet-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-latte-line) 70%, transparent) transparent;
+}
+
+/* ── pdf.js page layers ─────────────────────────────────────────────────────────── */
+
+.pdf-page {
+  --user-unit: 1;
+  --total-scale-factor: calc(var(--scale-factor) * var(--user-unit));
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+  position: relative;
+  background: #fff;
+}
+
+.pdf-page canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Everything we draw is laid out in page points (scale 1) and scaled with the page. */
+.page-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  transform: scale(var(--scale-factor));
+  pointer-events: none;
+}
+
+.textLayer {
+  position: absolute;
+  text-align: initial;
+  inset: 0;
+  overflow: clip;
+  opacity: 1;
+  line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: transparent;
+  z-index: 2;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+
+.textLayer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+}
+
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.textLayer .markedContent {
+  display: contents;
+}
+
+.textLayer ::selection {
+  background: rgba(240, 215, 163, 0.62);
+  color: transparent;
+}
+
+.textLayer br::selection {
+  background: transparent;
+}
+
+.textLayer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  cursor: default;
+  user-select: none;
+}
+
+.textLayer.selecting .endOfContent {
+  top: 0;
+}
+
+/* Where a drag would draw a box (blank space, a figure, a formula), the cursor says so before the press. */
+.pdf-page[data-zone="box"] .textLayer,
+.pdf-page[data-zone="box"] .textLayer :is(span, br),
+.pdf-page[data-zone="box"] .textLayer .endOfContent {
+  cursor: crosshair;
+}
+.pdf-page[data-zone="text"] .textLayer,
+.pdf-page[data-zone="text"] .textLayer .endOfContent {
+  cursor: text;
+}
+
+/* Translated text: the same rules for measuring and for drawing, so what fits when measured fits on the page. */
+.tr-text {
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  line-break: strict;
+  hyphens: auto;
+  text-align-last: left;
+  font-kerning: normal;
+  font-synthesis: none;
+  letter-spacing: 0;
+  text-autospace: normal;
+}
+
+.tr-text ::selection,
+.tr-text::selection {
+  background: rgba(240, 215, 163, 0.7);
+}
+
+/* Patch and text appear together, never the patch first. */
+.tr-in {
+  animation: tr-in 170ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes tr-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.translation-block {
+  transition: opacity 80ms ease-out;
+}
+
+/* While the reader peeks at the original (holding ⌥), translated text steps aside. */
+.peek-original .translation-block {
+  opacity: 0 !important;
+}
+
+.tr-clip {
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 1.2em), transparent);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 1.2em), transparent);
+}
+
+/* A thin line in the margin while a passage is being translated. */
+.tr-pending {
+  opacity: 0.55;
+  animation: tr-pending 1.1s ease-in-out infinite alternate;
+}
+@keyframes tr-pending {
+  from {
+    opacity: 0.18;
+  }
+  to {
+    opacity: 0.7;
+  }
+}
+
+.tr-shimmer {
+  background: linear-gradient(90deg, rgba(209, 75, 40, 0.04), rgba(209, 75, 40, 0.14), rgba(209, 75, 40, 0.04));
+  background-size: 200% 100%;
+  animation: tr-shimmer 1.2s linear infinite;
+}
+@keyframes tr-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.lens-in {
+  animation: tr-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Where a jump lands: a warm wash that fades out. */
+.flash-in {
+  background: rgba(232, 99, 63, 0.26);
+  mix-blend-mode: multiply;
+  animation: flash 1.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes flash {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.bar-in {
+  animation: bar-in 140ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.card-in {
+  animation: card-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* Box tool: no text selection while drawing a region. */
+.box-mode .textLayer :is(span, br) {
+  cursor: crosshair;
+  user-select: none;
+}
+
+/* ── Mind map ──────────────────────────────────────────────────────────────────── */
+.mind-map .react-flow__node {
+  cursor: default;
+}
+.mind-map .react-flow__node.dragging {
+  cursor: grabbing;
+  z-index: 1000 !important;
+}
+.mind-edge {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: edge-draw 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes edge-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+
+/* ── Chat ──────────────────────────────────────────────────────────────────────── */
+.thinking-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-latte-line);
+  animation: thinking 1s ease-in-out infinite;
+}
+@keyframes thinking {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+.streaming > div > :last-child::after {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 4px;
+  border-radius: 999px;
+  background: var(--color-paprika);
+  opacity: 0.7;
+  animation: thinking 1s ease-in-out infinite;
+  vertical-align: middle;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
