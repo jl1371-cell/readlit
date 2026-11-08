@@ -1,12 +1,20 @@
 /**
  * A deployed ReadLit can be closed behind an access code, so that only the people given the code spend its AI budget.
  * The code lives in the server's environment (READLIT_ACCESS_CODE); the browser keeps only a token derived from it,
- * so changing the code signs everyone out. With no code set (development), the app is open.
+ * so changing the code signs everyone out. With no code set, the app is open on this computer and shut when deployed.
  */
 export const ACCESS_COOKIE = "readlit_access";
 
 export function accessCode(): string | null {
   return process.env.READLIT_ACCESS_CODE?.trim() || null;
+}
+
+/**
+ * A deployed copy (Vercel sets VERCEL=1) with no code stays shut instead of open, so a forgotten setting never hands
+ * the AI budget to everyone who finds the address.
+ */
+export function needsSetup(): boolean {
+  return !accessCode() && !!process.env.VERCEL;
 }
 
 export async function accessToken(code: string): Promise<string> {

@@ -15,6 +15,7 @@ import {
   selectionTranslatable,
   sentenceRects,
 } from "@/lib/pdf/text-model";
+import { pngSize } from "@/lib/pdf/render";
 import { type LensKind, pairsWanted, useSettings } from "./settings";
 
 export type Tool = "select" | "box";
@@ -656,10 +657,12 @@ export const useReader = create<ReaderState>((set, get) => {
             const png = await image();
             if (!png) throw new Error("Couldn't capture that area.");
             const lang = useSettings.getState().lang;
-            // Same size renderRegion produced: longer edge at most 1568 px, at most 4× the page.
-            const k = Math.min(4, 1568 / Math.max(rect.w, rect.h, 1));
-            const W = Math.max(1, Math.round(rect.w * k));
-            const H = Math.max(1, Math.round(rect.h * k));
+            // The image's real size, read from the PNG itself: renderRegion draws a very large figure smaller.
+            const size = pngSize(png);
+            const k0 = Math.min(4, 1568 / Math.max(rect.w, rect.h, 1));
+            const W = size?.width ?? Math.max(1, Math.round(rect.w * k0));
+            const H = size?.height ?? Math.max(1, Math.round(rect.h * k0));
+            const k = W / Math.max(rect.w, 1e-6);
             const answer = await postJSON<{ lines: { original: string; text: string; box?: number[] }[] }>("/api/figure-text", {
               lang,
               title: get().title,

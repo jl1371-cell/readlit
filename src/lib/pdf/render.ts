@@ -109,25 +109,53 @@ export function paperColorBehind(page: number, rect: Rect, pageWidth: number): s
   return `rgb(${Math.round(best.r / best.n)}, ${Math.round(best.g / best.n)}, ${Math.round(best.b / best.n)})`;
 }
 
-/** Render a region of a page (page points) to a PNG data URL, sized so its longer edge is at most `maxEdge` px. */
+/**
+ * Keeps a region's image well inside the 4.5 MB a request may carry on a hosted function, with room left for the rest
+ * of the request. A photo-like figure at full size can be larger; it is then drawn smaller, never cut off.
+ */
+const MAX_IMAGE_CHARS = 2_800_000;
+
+/**
+ * Render a region of a page (page points) to a PNG data URL, sized so its longer edge is at most `maxEdge` px (less
+ * for the rare figure whose PNG would be too large to send). Read the real size back with `pngSize`.
+ */
 export async function renderRegion(doc: PDFDocumentProxy, pageNumber: number, rect: Rect, maxEdge = 1568): Promise<string | null> {
   try {
     const page = await doc.getPage(pageNumber);
     const longest = Math.max(rect.w, rect.h, 1);
-    const scale = Math.min(4, maxEdge / longest);
-    const viewport = page.getViewport({ scale });
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(rect.w * scale));
-    canvas.height = Math.max(1, Math.round(rect.h * scale));
-    await page.render({
-      canvas,
-      viewport,
-      background: "#ffffff",
-      transform: [1, 0, 0, 1, -rect.x * scale, -rect.y * scale],
-    }).promise;
-    return canvas.toDataURL("image/png");
+    for (let edge = maxEdge; ; edge = Math.round(edge * 0.75)) {
+      const scale = Math.min(4, edge / longest);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(rect.w * scale));
+      canvas.height = Math.max(1, Math.round(rect.h * scale));
+      await page.render({
+        canvas,
+        viewport,
+        background: "#ffffff",
+        transform: [1, 0, 0, 1, -rect.x * scale, -rect.y * scale],
+      }).promise;
+      const url = canvas.toDataURL("image/png");
+      if (url.length <= MAX_IMAGE_CHARS || edge <= 640) return url;
+    }
   } catch (err) {
     console.warn("Could not render region", err);
     return null;
   }
+}
+
+/** The pixel size of a PNG data URL, read from its header (the IHDR chunk right after the signature). */
+export function pngSize(dataUrl: string): { width: number; height: number } | null {
+  const at = dataUrl.indexOf(",") + 1;
+  let bin: string;
+  try {
+    bin = atob(dataUrl.slice(at, at + 32));
+  } catch {
+    return null;
+  }
+  if (bin.length < 24 || bin.slice(12, 16) !== "IHDR") return null;
+  const u32 = (i: number) => ((bin.charCodeAt(i) << 24) | (bin.charCodeAt(i + 1) << 16) | (bin.charCodeAt(i + 2) << 8) | bin.charCodeAt(i + 3)) >>> 0;
+  const width = u32(16);
+  const height = u32(20);
+  return width > 0 && height > 0 ? { width, height } : null;
 }

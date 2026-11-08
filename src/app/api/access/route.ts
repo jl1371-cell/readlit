@@ -1,11 +1,11 @@
-import { ACCESS_COOKIE, accessCode, accessToken, limiter, sameText, visitor } from "@/lib/access";
+import { ACCESS_COOKIE, accessCode, accessToken, limiter, needsSetup, sameText, visitor } from "@/lib/access";
 
 const attempts = limiter(12, 10 * 60_000);
 
 /** Check the access code; when it matches, the browser keeps a token for 30 days. */
 export async function POST(req: Request) {
   const code = accessCode();
-  if (!code) return Response.json({ ok: true });
+  if (!code) return needsSetup() ? Response.json({ error: "No access code is set yet." }, { status: 503 }) : Response.json({ ok: true });
   if (!attempts(visitor(req.headers))) return Response.json({ error: "Too many tries. Wait a few minutes." }, { status: 429 });
   const body = (await req.json().catch(() => null)) as { code?: unknown } | null;
   const given = typeof body?.code === "string" ? body.code.trim() : "";

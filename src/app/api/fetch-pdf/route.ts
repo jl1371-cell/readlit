@@ -1,7 +1,8 @@
 import { lookup } from "node:dns/promises";
 import net from "node:net";
 
-export const maxDuration = 60;
+// A large PDF from a slow server takes a while to pass through.
+export const maxDuration = 120;
 
 const MAX_BYTES = 60 * 1024 * 1024;
 
@@ -44,13 +45,30 @@ async function safeFetch(url: URL, hops = 0): Promise<Response> {
   if (host === "localhost" || host.endsWith(".local") || net.isIP(host)) throw new Error("That address isn't allowed.");
   const addrs = await lookup(host, { all: true });
   if (addrs.some((a) => isPrivate(a.address))) throw new Error("That address isn't allowed.");
-  const res = await fetch(url, { redirect: "manual", headers: { "user-agent": "ReadLit/0.1 (paper reader)", accept: "application/pdf,*/*" } });
+  // no-store: a PDF passing through must never be copied into Next's data cache (which would also hold it in memory).
+  const res = await fetch(url, {
+    cache: "no-store",
+    redirect: "manual",
+    headers: { "user-agent": "ReadLit/0.1 (paper reader)", accept: "application/pdf,*/*" },
+  });
   if (res.status >= 300 && res.status < 400) {
     const next = res.headers.get("location");
     if (!next) throw new Error("Broken redirect.");
     return safeFetch(new URL(next, url), hops + 1);
   }
   return res;
+}
+
+/** The bytes read so far, as one array. */
+function joined(chunks: Uint8Array[]): Uint8Array {
+  if (chunks.length === 1) return chunks[0];
+  const out = new Uint8Array(chunks.reduce((n, c) => n + c.byteLength, 0));
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.byteLength;
+  }
+  return out;
 }
 
 export async function GET(req: Request) {
@@ -60,14 +78,56 @@ export async function GET(req: Request) {
   try {
     const res = await safeFetch(url);
     if (!res.ok || !res.body) return Response.json({ error: `The site answered ${res.status}.` }, { status: 502 });
+    if (Number(res.headers.get("content-length")) > MAX_BYTES) {
+      void res.body.cancel().catch(() => {});
+      return Response.json({ error: "That PDF is too large." }, { status: 413 });
+    }
+    // Look at the first bytes before answering, so a web page gets a clear message instead of being passed on.
+    const reader = res.body.getReader();
+    const head: Uint8Array[] = [];
+    let size = 0;
+    while (size < 5) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      head.push(value);
+      size += value.byteLength;
+    }
+    const first = joined(head);
     const type = res.headers.get("content-type") ?? "";
-    const buf = new Uint8Array(await res.arrayBuffer());
-    if (buf.byteLength > MAX_BYTES) return Response.json({ error: "That PDF is too large." }, { status: 413 });
-    const isPdf = type.includes("pdf") || (buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46);
-    if (!isPdf) return Response.json({ error: "That link isn't a PDF. Try the paper's PDF link." }, { status: 415 });
+    const isPdf = type.includes("pdf") || (first[0] === 0x25 && first[1] === 0x50 && first[2] === 0x44 && first[3] === 0x46);
+    if (!isPdf || !first.byteLength) {
+      void reader.cancel().catch(() => {});
+      return Response.json({ error: "That link isn't a PDF. Try the paper's PDF link." }, { status: 415 });
+    }
     const name = (url.pathname.split("/").pop() || "paper").replace(/[^\w.-]+/g, "_");
-    return new Response(buf, {
-      headers: { "content-type": "application/pdf", "x-file-name": name.endsWith(".pdf") ? name : `${name}.pdf` },
+    // Passed on as it arrives: a hosted function may answer with at most 4.5 MB at once, but a stream has no such
+    // cap, and nothing waits on the whole file in memory. The size limit still holds for servers that don't say
+    // how large the file is.
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(first);
+      },
+      async pull(controller) {
+        const { done, value } = await reader.read();
+        if (done) return controller.close();
+        size += value.byteLength;
+        if (size > MAX_BYTES) {
+          controller.error(new Error("That PDF is too large."));
+          void reader.cancel().catch(() => {});
+          return;
+        }
+        controller.enqueue(value);
+      },
+      cancel(reason) {
+        void reader.cancel(reason).catch(() => {});
+      },
+    });
+    return new Response(body, {
+      headers: {
+        "content-type": "application/pdf",
+        "cache-control": "no-store",
+        "x-file-name": name.endsWith(".pdf") ? name : `${name}.pdf`,
+      },
     });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : "Couldn't fetch that PDF." }, { status: 502 });

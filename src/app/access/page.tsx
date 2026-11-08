@@ -1,9 +1,13 @@
+import { needsSetup } from "@/lib/access";
 import { AccessForm } from "./AccessForm";
 
 export const metadata = { title: "ReadLit" };
+// Read at request time: whether a code is set is the server's setting, not something to bake into the build.
+export const dynamic = "force-dynamic";
 
 /** The door of a deployed ReadLit: the one thing shown until the access code is entered. */
 export default function AccessPage() {
+  const setup = needsSetup();
   return (
     <div className="relative flex min-h-dvh items-center justify-center bg-canvas px-6">
       <div
@@ -21,8 +25,20 @@ export default function AccessPage() {
           <span className="font-display text-title font-semibold text-ink">ReadLit</span>
         </div>
         <p className="mt-5 text-body text-ink-soft">Read any paper, in place.</p>
-        <p className="mt-1 text-ui text-latte">This preview is open to people with its access code.</p>
-        <AccessForm />
+        {setup ? (
+          <>
+            <p className="mt-1 text-ui text-latte">This copy isn&rsquo;t open yet.</p>
+            <p className="mt-6 rounded-2xl bg-canvas/70 px-5 py-4 text-left text-label leading-relaxed text-ink-soft">
+              Its owner adds an access code, named <span className="font-medium text-ink">READLIT_ACCESS_CODE</span>, in
+              the hosting settings and deploys again. Until then the AI stays off, so nobody spends its budget.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="mt-1 text-ui text-latte">This preview is open to people with its access code.</p>
+            <AccessForm />
+          </>
+        )}
       </main>
     </div>
   );

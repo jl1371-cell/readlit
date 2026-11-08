@@ -86,8 +86,9 @@ Then open http://localhost:3000. If `OPENAI_API_KEY` is already exported in your
 1. Import this repository in Vercel (Add New → Project → Import). The framework is detected as Next.js; nothing else to set.
 2. Add the environment variables, then deploy:
    - `OPENAI_API_KEY`: best a key of its own, in an OpenAI project with a monthly budget, so a public link can never spend more than that.
-   - `READLIT_ACCESS_CODE`: the code people type to use the site. With it set, every page shows a code screen first and every API route answers 401 until the code is entered (the browser then keeps a token for 30 days; changing the code signs everyone out). Without it, the site is open to anyone.
+   - `READLIT_ACCESS_CODE`: the code people type to use the site. Every page shows a code screen first and every API route answers 401 until the code is entered (the browser then keeps a token for 30 days; changing the code signs everyone out). If it is missing, a Vercel deployment stays shut (every page says so, every API route answers 503) rather than open; only a copy running on your own computer is open without a code.
 3. AI routes are also limited per visitor (about 90 a minute; `src/proxy.ts`). That is a burst guard; the budget on the key is the real ceiling.
+4. A paper opened by link is streamed through `/api/fetch-pdf` (a Vercel function can return at most 4.5 MB unless it streams), up to 60 MB. A boxed figure is sent as a PNG kept under about 2.8 MB, inside the 4.5 MB a request may carry.
 
 Papers, notes and answers stay in each visitor's browser; the server keeps nothing.
 
