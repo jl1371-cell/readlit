@@ -24,15 +24,9 @@ export function languageByCode(code: string): Language {
   return LANGUAGES.find((l) => l.code === code) ?? LANGUAGES[0];
 }
 
-/** First non-English language the browser prefers, else Simplified Chinese. */
+/** The language a new reader starts in. */
 export function defaultTargetLanguage(): string {
-  if (typeof navigator === "undefined") return "zh-Hans";
-  for (const tag of navigator.languages ?? [navigator.language]) {
-    const t = tag.toLowerCase();
-    if (t.startsWith("en")) continue;
-    if (t.startsWith("zh")) return /tw|hk|mo|hant/.test(t) ? "zh-Hant" : "zh-Hans";
-    const hit = LANGUAGES.find((l) => t.startsWith(l.code.toLowerCase()));
-    if (hit) return hit.code;
-  }
-  return "zh-Hans";
+  // English first: the papers are in English and so are most readers we show it to. Every other language is one
+  // choice away in the language menu, and a reader's choice is saved and wins over this default.
+  return "en";
 }

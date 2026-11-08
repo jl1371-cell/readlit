@@ -3,6 +3,8 @@ import { create } from "zustand";
 import { dbDel, dbEntries, dbGet, dbSet, keys } from "@/lib/db";
 import { sha256Hex } from "@/lib/hash";
 import { LANGUAGES } from "@/lib/languages";
+import type { PDFDocumentProxy } from "pdfjs-dist";
+import type { TextItem } from "pdfjs-dist/types/src/display/api";
 import { openPdf } from "@/lib/pdf/pdfjs";
 
 export interface PaperMeta {
@@ -45,9 +47,49 @@ function remember(id: string | null) {
 
 function cleanTitle(raw: string | undefined, fileName: string): string {
   const t = (raw ?? "").replace(/\s+/g, " ").trim();
-  const junk = !t || /^(untitled|microsoft word|document\d*|\d+)$/i.test(t) || /\.(pdf|docx?|tex)$/i.test(t);
-  if (!junk) return t;
+  if (!junkTitle(t)) return t;
   return fileName.replace(/\.pdf$/i, "").replace(/[_-]+/g, " ").trim() || "Untitled paper";
+}
+
+/**
+ * A file's own Title field is often a typesetter's placeholder: "Microsoft Word - draft3", a file name, or a journal
+ * ID with a page range ("pmed.1000316 1..20"). None of those is a title a reader would recognise.
+ */
+function junkTitle(t: string): boolean {
+  return (
+    !t ||
+    /^(untitled|document\d*|\d+)$/i.test(t) ||
+    /^microsoft word\b/i.test(t) ||
+    /\.(pdf|docx?|tex)$/i.test(t) ||
+    /\d+\s*\.\.\s*\d+/.test(t) ||
+    /^[a-z]{2,8}\.\d{4,}/i.test(t) ||
+    !/[a-z]{2,}\s+[a-z]{2,}/i.test(t)
+  );
+}
+
+/** The largest type in the upper part of page 1: on almost every paper, that is its title. */
+async function firstPageTitle(doc: PDFDocumentProxy): Promise<string> {
+  try {
+    const page = await doc.getPage(1);
+    const { height } = page.getViewport({ scale: 1 });
+    const content = await page.getTextContent();
+    const items = content.items
+      .filter((it): it is TextItem => "str" in it && !!it.str.trim())
+      .map((it) => ({ s: it.str, size: Math.hypot(it.transform[2], it.transform[3]), y: it.transform[5] }))
+      .filter((it) => it.y > height * 0.4);
+    if (!items.length) return "";
+    const max = Math.max(...items.map((it) => it.size));
+    const t = items
+      .filter((it) => it.size >= max * 0.92)
+      .map((it) => it.s)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .replace(/(\w)- (\w)/g, "$1-$2")
+      .trim();
+    return t.length >= 8 && t.length <= 300 && !junkTitle(t) ? t : "";
+  } catch {
+    return "";
+  }
 }
 
 export const useLibrary = create<LibraryState>((set, get) => ({
@@ -89,7 +131,9 @@ export const useLibrary = create<LibraryState>((set, get) => ({
       const info = (await doc.getMetadata().catch(() => null))?.info as { Title?: string; Author?: string } | undefined;
       const meta: PaperMeta = {
         id,
-        title: cleanTitle(info?.Title, file.name),
+        title: !junkTitle((info?.Title ?? "").replace(/\s+/g, " ").trim())
+          ? cleanTitle(info?.Title, file.name)
+          : (await firstPageTitle(doc)) || cleanTitle(undefined, file.name),
         authors: (info?.Author ?? "").trim(),
         fileName: file.name,
         pages: doc.numPages,

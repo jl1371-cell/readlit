@@ -24,7 +24,9 @@ function plainMath(m: string): string {
  * (models sometimes write it although they are asked not to; raw "\(t\)" reads badly).
  */
 export function tidy(text: string): string {
-  return expandCitationRanges(text)
+  // While an answer streams in, its newest citation can arrive half-written ("[[p6"); it waits until it is whole
+  // instead of flashing as raw brackets.
+  return expandCitationRanges(text.replace(/\[\[[^\]\n]*\]?$/, ""))
     .replace(/\r/g, "")
     // Citations side by side become one chip group (the beyond-the-paper marker is never merged into one).
     .replace(/(\[\[\s*p\d+s\d+[^\]]*)\]\]\s*\[\[(?=\s*p\d+s\d+)/g, "$1, ")
